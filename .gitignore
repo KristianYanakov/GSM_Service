@@ -1,0 +1,23 @@
+# Python / Django
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.sqlite3
+/backend/media/
+/backend/staticfiles/
+
+# Env files — CRITICAL
+.env
+.env.*
+!.env.example
+
+# Node / React
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
