@@ -123,5 +123,13 @@ MAILERS = {
     },
 }
 
+REST_FRAMEWORK = {
+    "DEFAULT_THROTTLE_CLASSES": [],  # only applied where explicitly set, not globally
+    "DEFAULT_THROTTLE_RATES": {
+        "order_create": "100/hour", # TODO: loosen during development change to 3 when in prod
+    },
+}
+# it's using Django's default local-memory cache, which means restarting the dev server clears the throttle history
+
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"

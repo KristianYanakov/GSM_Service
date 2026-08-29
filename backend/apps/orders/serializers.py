@@ -1,3 +1,4 @@
+import re
 from rest_framework import serializers
 from .models import Order, OrderItem
 from apps.catalog.models import Product
@@ -20,14 +21,29 @@ class OrderItemReadSerializer(serializers.ModelSerializer):
 class OrderCreateSerializer(serializers.ModelSerializer):
     items = OrderItemWriteSerializer(many=True, write_only=True)
 
+    # Honeypot field — real users never see or fill this in.
+    # Named to look tempting to a bot filling forms generically.
+    website = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = Order
         fields = [
             "id", "order_number", "full_name", "phone", "email",
             "econt_office", "shipping_address",
-            "notes", "items",
+            "notes", "items", "website",
         ]
         read_only_fields = ["id", "order_number"]
+
+    def validate_website(self, value):
+        if value:
+            # Silently-looking generic error — don't reveal this is a honeypot check.
+            raise serializers.ValidationError("Unable to process request.")
+        return value
+
+    def validate_phone(self, value):
+        if not re.match(r'^[0-9+\s\-]{6,20}$', value):
+            raise serializers.ValidationError("Enter a valid phone number.")
+        return value
 
     def validate_items(self, items):
         if not items:
