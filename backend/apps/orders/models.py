@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 from django.db.models import Sum, F
 from django.db.models.signals import post_save, post_delete
@@ -15,6 +16,8 @@ class Order(TimeStampedModel):
         ("paid", "Paid"),
         ("cancelled", "Cancelled"),
     ]
+
+    order_number = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
 
     full_name = models.CharField(max_length=150)
     phone = models.CharField(max_length=30)

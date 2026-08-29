@@ -23,10 +23,11 @@ class OrderCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "full_name", "phone", "email",
+            "id", "order_number", "full_name", "phone", "email",
             "econt_office", "shipping_address",
             "notes", "items",
         ]
+        read_only_fields = ["id", "order_number"]
 
     def validate_items(self, items):
         if not items:
@@ -49,7 +50,6 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 product=product,
                 quantity=item["quantity"],
             )
-        # total_price is recalculated automatically by the signal you already have
         return order
 
 
@@ -59,7 +59,7 @@ class OrderReadSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = [
-            "id", "full_name", "phone", "email",
+            "order_number", "full_name", "phone", "email",
             "econt_office", "shipping_address", "econt_tracking_number",
             "status", "total_price", "notes", "items", "created_at",
         ]
