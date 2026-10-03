@@ -4,14 +4,48 @@ A full-stack web platform for a real-world GSM (phone & accessories) shop that a
 
 ## Project Status
 
-🚧 **In active development.** Backend API is functional; frontend not yet started.
+🚧 **In active development.**
+
+- ✅ Backend API — fully functional
+- ✅ Frontend — core shopping flow (store, cart, checkout, order confirmation) and content pages (services, location/map/gallery) working end-to-end
+- ⏳ Homepage, UX polish, and deployment — in progress
 
 ## Tech Stack
 
-- **Backend:** Django + Django REST Framework
-- **Database:** PostgreSQL
-- **Frontend:** React (planned — not yet implemented)
-- **Shipping:** Econt (cash-on-delivery flow; no online payment gateway currently)
+| Layer | Technology |
+|---|---|
+| Backend | Django + Django REST Framework |
+| Database | PostgreSQL |
+| Frontend | React (Vite) |
+| UI Library | Material UI (MUI) |
+| State Management | Redux Toolkit |
+| Routing | React Router |
+| Maps | Leaflet / OpenStreetMap |
+| HTTP Client | Axios |
+| Shipping | Econt (cash/card-on-delivery flow; no online payment gateway currently) |
+
+## Features
+
+### Store
+- Product catalog with category and type filtering (`?category=`, `?type=`)
+- Product detail pages with image galleries
+- Cart (Redux-backed, persists across navigation within a session)
+- Guest checkout — no account required
+- Order confirmation page with a shareable, non-guessable order status link
+
+### Services
+- Repair/services listing grouped by category, with starting prices and turnaround times
+
+### Location
+- Shop address, phone, and working hours
+- Interactive map (Leaflet) showing the physical store location
+- Photo gallery of the shop
+
+### Admin (Django Admin)
+- Full content management: products, categories, images, services, orders, gallery, shop info
+- Inline product image galleries with primary-image and ordering controls
+- Order status updates directly from the order list
+- Singleton enforcement for shop-wide info (only one `ShopInfo` row can ever exist)
 
 ## Project Structure
 
@@ -41,7 +75,24 @@ gsm-shop/
 │   ├── .env                       # Local secrets (gitignored, not committed)
 │   └── .env.example                # Template for required env vars
 │
-└── frontend/                       # React app (planned)
+└── frontend/
+    ├── src/
+    │   ├── api/                    # Axios API layer, one module per backend app
+    │   ├── app/
+    │   │   └── store.js            # Redux store config
+    │   ├── features/
+    │   │   └── cart/                # Redux slice + selectors for cart state
+    │   ├── components/
+    │   │   ├── layout/               # Header, Footer
+    │   │   ├── product/               # ProductCard, ProductGrid
+    │   │   └── common/                 # Shared UI (LoadingSpinner, etc.)
+    │   ├── pages/                     # One component per route
+    │   ├── theme/
+    │   │   └── theme.js               # MUI theme customization
+    │   ├── App.jsx                    # Route definitions
+    │   └── main.jsx                   # Entry point, providers
+    ├── .env                        # Local env (gitignored)
+    └── .env.example
 ```
 
 ## Backend Setup (Local Development)
@@ -54,7 +105,7 @@ gsm-shop/
 ### 2. Clone and install dependencies
 
 ```bash
-git clone https://github.com/KristianYanakov/GSM_Service
+git clone <repo-url>
 cd gsm-shop/backend
 python -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
@@ -62,8 +113,6 @@ pip install -r requirements/base.txt
 ```
 
 ### 3. Configure environment variables
-
-Copy the example file and fill in real values:
 
 ```bash
 cp .env.example .env
@@ -108,21 +157,48 @@ python manage.py runserver
 - Admin panel: `http://127.0.0.1:8000/admin/`
 - API root: `http://127.0.0.1:8000/api/`
 
+## Frontend Setup (Local Development)
+
+### 1. Install dependencies
+
+```bash
+cd gsm-shop/frontend
+npm install
+```
+
+### 2. Configure environment variables
+
+```bash
+cp .env.example .env
+```
+
+```env
+VITE_API_URL=http://127.0.0.1:8000/api
+```
+
+### 3. Run the dev server
+
+```bash
+npm run dev
+```
+
+Visit `http://localhost:5173`. Requires the backend to be running simultaneously on `http://127.0.0.1:8000`.
+
 ## API Overview
 
-All endpoints are prefixed with `/api/`.
+All endpoints are prefixed with `/api/`. List endpoints are paginated (`PAGE_SIZE = 12`) and return results under a `results` key.
 
 ### Catalog
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/catalog/categories/` | List product categories |
-| GET | `/catalog/products/` | List active products (paginated). Supports `?category=<slug>` and `?type=phone\|accessory` |
+| GET | `/catalog/products/` | List active products. Supports `?category=<slug>` and `?type=phone\|accessory` |
 | GET | `/catalog/products/<slug>/` | Product detail with full image gallery |
 
 ### Orders
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/orders/` | Create a new order (public, rate-limited to 5/hour per IP) |
+| POST | `/orders/` | Create a new order (public, rate-limited to 5/hour per IP, honeypot-protected) |
 | GET | `/orders/<order_number>/` | Retrieve order status by UUID (given to customer at checkout) |
 
 > There is intentionally **no** endpoint to list all orders publicly. Order management happens via Django admin only.
@@ -138,16 +214,17 @@ All endpoints are prefixed with `/api/`.
 |---|---|---|
 | GET | `/shop-info/locations/` | List shop location(s) with coordinates & hours |
 | GET | `/shop-info/gallery/` | List gallery images, ordered for display |
-| GET | `/shop-info/info/` | Shop-level info (about text, staff blurb, socials) — singleton |
+| GET | `/shop-info/info/` | Shop-level info (about text, staff blurb, socials) — singleton, 404s cleanly if unconfigured |
 
 ## Key Design Decisions
 
 - **Order security:** Orders are looked up via a non-sequential `UUID` (`order_number`), not the database's auto-incrementing ID, to prevent customers from guessing/enumerating other people's orders.
 - **Price integrity:** `OrderItem.price_at_purchase` is snapshotted from the product's price at order time and is never editable after creation, so historical orders remain accurate even if product prices change later.
-- **Order total is computed, not entered:** `Order.total_price` is automatically recalculated via a signal whenever order items are added, changed, or removed — it cannot be manually overridden.
+- **Order total is computed, not entered:** `Order.total_price` is automatically recalculated via a signal whenever order items are added, changed, or removed — it cannot be manually overridden by a customer.
 - **Abuse protection on checkout:** The public order-creation endpoint is protected with DRF rate limiting (5 requests/hour per IP) and a honeypot field to deter basic bots.
 - **Read/write serializer separation:** Orders use separate serializers for customer-submitted data (`OrderCreateSerializer`) vs. server-rendered data (`OrderReadSerializer`), so customers can never set fields like `status` or `total_price` themselves.
 - **Singleton pattern for `ShopInfo`:** Enforced both at the model level (`save()` pins `pk=1`) and in Django admin (add/delete permissions disabled once one row exists), since there's only ever one shop-info record.
+- **Cart state lives in Redux, not the backend:** The cart is entirely client-side until checkout — no account or session is required to browse and add items, keeping the shopping flow frictionless for guest customers.
 
 ## Environment & Secrets
 
@@ -155,13 +232,24 @@ All endpoints are prefixed with `/api/`.
 - Media uploads (`backend/media/`) are gitignored; they should be handled via object storage (e.g. S3) in production, not stored in git.
 - Database: PostgreSQL is used in both development and production — SQLite is not used, to avoid concurrency issues with simultaneous order writes.
 
+## Known Technical Notes
+
+- Built against **MUI v9**, which uses the newer `<Grid size={{ xs: ..., md: ... }}>` API rather than the older `<Grid item xs={...}>` syntax.
+- Leaflet requires a manual marker-icon fix and an `invalidateSize()` call after mount to render correctly inside MUI's Grid/Box layout system — see `LocationPage.jsx`.
+- DRF's default rate-limit cache (`LocMemCache`) is per-process; production deployment with multiple workers will need a shared cache backend (e.g. Redis) for rate limiting to work correctly across all of them.
+
 ## Roadmap
 
-- [ ] React frontend (store grid, product detail, cart, checkout, services page, gallery, map)
-- [ ] Econt shipping integration (office selection, tracking sync)
-- [ ] Production deployment config (`prod.py` settings, HTTPS, shared cache backend for rate limiting across workers)
+- [x] Backend API (models, admin, serializers, views, security hardening)
+- [x] Core shopping flow (store, product detail, cart, checkout, order confirmation)
+- [x] Services page
+- [x] Location page with map and gallery
+- [ ] Homepage
+- [ ] UX polish (category filter UI, empty/loading states, 404 page, mobile pass)
+- [ ] Production deployment (hosting, HTTPS, shared cache, static/media serving)
+- [ ] Econt API integration (office picker, tracking sync)
 - [ ] Optional: staff member profiles, online prepayment option
 
 ## License
 
-Kristian Yanakov — (LICENSE)
+_Copyright Kristian Yanakov_
