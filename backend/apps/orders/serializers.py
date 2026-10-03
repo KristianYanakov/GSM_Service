@@ -51,6 +51,7 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return items
 
     def create(self, validated_data):
+        validated_data.pop("website", None) # Remove honeypot field so request don't break
         items_data = validated_data.pop("items")
         order = Order.objects.create(**validated_data)
 

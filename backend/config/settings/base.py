@@ -128,6 +128,8 @@ REST_FRAMEWORK = {
     "DEFAULT_THROTTLE_RATES": {
         "order_create": "100/hour", # TODO: loosen during development change to 3 when in prod
     },
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 12,
 }
 # it's using Django's default local-memory cache, which means restarting the dev server clears the throttle history
 
