@@ -29,7 +29,7 @@ type CartContextValue = {
   items: CartItem[]
   count: number
   subtotal: number
-  add: (productOrSlug: Product | string, qty?: number) => void
+  add: (productOrSlug: Product | string, qty?: number) => boolean
   setQty: (slug: string, qty: number) => void
   remove: (slug: string) => void
   clear: () => void
@@ -39,6 +39,13 @@ const CartContext = createContext<CartContextValue | null>(null)
 
 const MAX_QTY = 10
 const STORAGE_KEY = 'gsm_shop_cart_v2'
+
+export function getMaxAllowedQty(product: Product): number {
+  if (typeof product.stockQuantity === 'number' && product.stockQuantity > 0) {
+    return Math.min(MAX_QTY, product.stockQuantity)
+  }
+  return MAX_QTY
+}
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
   const [lines, setLines] = useState<CartLine[]>([])
@@ -85,25 +92,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
       add: (productOrSlug, qty = 1) => {
         const product =
           typeof productOrSlug === 'string' ? getProduct(productOrSlug) : productOrSlug
-        if (!product) return
+        if (!product || !product.inStock || product.stockQuantity <= 0) return false
+
+        const maxAllowed = getMaxAllowedQty(product)
+        const existing = lines.find((l) => l.product.slug === product.slug)
+
+        if (existing && existing.qty >= maxAllowed) {
+          return false
+        }
 
         setLines((prev) => {
-          const existing = prev.find((l) => l.product.slug === product.slug)
-          if (existing) {
+          const curr = prev.find((l) => l.product.slug === product.slug)
+          if (curr) {
             return prev.map((l) =>
               l.product.slug === product.slug
-                ? { ...l, product, qty: Math.min(MAX_QTY, l.qty + qty) }
+                ? { ...l, product, qty: Math.min(maxAllowed, l.qty + qty) }
                 : l,
             )
           }
-          return [...prev, { product, qty: Math.min(MAX_QTY, qty) }]
+          return [...prev, { product, qty: Math.min(maxAllowed, qty) }]
         })
+        return true
       },
       setQty: (slug, qty) =>
         setLines((prev) =>
-          prev.map((l) =>
-            l.product.slug === slug ? { ...l, qty: Math.max(1, Math.min(MAX_QTY, qty)) } : l,
-          ),
+          prev.map((l) => {
+            if (l.product.slug !== slug) return l
+            const maxAllowed = getMaxAllowedQty(l.product)
+            return { ...l, qty: Math.max(1, Math.min(maxAllowed, qty)) }
+          }),
         ),
       remove: (slug) => setLines((prev) => prev.filter((l) => l.product.slug !== slug)),
       clear: () => setLines([]),

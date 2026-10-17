@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/empty-state'
 import { PageHeader } from '@/components/page-header'
 import { SummaryRow } from '@/components/order-lines'
 import { StatusChip } from '@/components/status-chip'
-import { MAX_QTY, useCart } from '@/components/cart-provider'
+import { getMaxAllowedQty, useCart } from '@/components/cart-provider'
 import { formatPrice } from '@/lib/site'
 import { cn } from '@/lib/utils'
 
@@ -61,61 +61,79 @@ export function CartView() {
             <span className="sr-only">Remove</span>
           </div>
           <ul className="flex flex-col gap-3">
-            {items.map(({ product, qty, lineTotal }) => (
-              <li
-                key={product.slug}
-                className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 rounded-2xl bg-card p-4 shadow-soft ring-1 ring-border/60 md:grid-cols-[1fr_120px_150px_110px_44px] md:items-center md:p-5"
-              >
-                <div className="row-span-2 flex items-center gap-4 md:row-span-1">
-                  <Link
-                    href={`/store/${product.slug}`}
-                    className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted"
-                  >
-                    <Image
-                      src={product.image}
-                      alt={product.name}
-                      fill
-                      sizes="80px"
-                      className="object-cover"
-                    />
-                  </Link>
-                  <div className="hidden min-w-0 md:block">
-                    <ProductTitle slug={product.slug} name={product.name} category={product.category} />
+            {items.map(({ product, qty, lineTotal }) => {
+              const maxQty = getMaxAllowedQty(product)
+              return (
+                <li
+                  key={product.slug}
+                  className="grid grid-cols-[80px_1fr] gap-x-4 gap-y-3 rounded-2xl bg-card p-4 shadow-soft ring-1 ring-border/60 md:grid-cols-[1fr_120px_150px_110px_44px] md:items-center md:p-5"
+                >
+                  <div className="row-span-2 flex items-center gap-4 md:row-span-1">
+                    <Link
+                      href={`/store/${product.slug}`}
+                      className="relative size-20 shrink-0 overflow-hidden rounded-xl bg-muted"
+                    >
+                      <Image
+                        src={product.image}
+                        alt={product.name}
+                        fill
+                        sizes="80px"
+                        className="object-cover"
+                      />
+                    </Link>
+                    <div className="hidden min-w-0 md:block">
+                      <ProductTitle
+                        slug={product.slug}
+                        name={product.name}
+                        category={product.category}
+                      />
+                    </div>
                   </div>
-                </div>
 
-                <div className="flex min-w-0 items-start justify-between gap-2 md:hidden">
-                  <div className="min-w-0">
-                    <ProductTitle slug={product.slug} name={product.name} category={product.category} />
-                    <p className="mt-1 text-sm text-muted-foreground">{formatPrice(product.price)} each</p>
+                  <div className="flex min-w-0 items-start justify-between gap-2 md:hidden">
+                    <div className="min-w-0">
+                      <ProductTitle
+                        slug={product.slug}
+                        name={product.name}
+                        category={product.category}
+                      />
+                      <p className="mt-1 text-sm text-muted-foreground">
+                        {formatPrice(product.price)} each
+                      </p>
+                    </div>
+                    <RemoveButton onClick={() => remove(product.slug)} name={product.name} />
                   </div>
-                  <RemoveButton onClick={() => remove(product.slug)} name={product.name} />
-                </div>
 
-                <p className="hidden font-semibold text-navy md:block">{formatPrice(product.price)}</p>
-
-                <div className="flex items-center justify-between gap-3 md:contents">
-                  <QuantityStepper
-                    size="sm"
-                    value={qty}
-                    max={MAX_QTY}
-                    onChange={(v) => setQty(product.slug, v)}
-                    label={`Quantity for ${product.name}`}
-                  />
-                  <p className="text-lg font-bold text-navy md:text-right md:text-base">
-                    {formatPrice(lineTotal)}
+                  <p className="hidden font-semibold text-navy md:block">
+                    {formatPrice(product.price)}
                   </p>
-                </div>
 
-                <div className="hidden md:block">
-                  <RemoveButton onClick={() => remove(product.slug)} name={product.name} />
-                </div>
-              </li>
-            ))}
+                  <div className="flex items-center justify-between gap-3 md:contents">
+                    <QuantityStepper
+                      size="sm"
+                      value={qty}
+                      max={maxQty}
+                      onChange={(v) => setQty(product.slug, v)}
+                      label={`Quantity for ${product.name}`}
+                    />
+                    <p className="text-lg font-bold text-navy md:text-right md:text-base">
+                      {formatPrice(lineTotal)}
+                    </p>
+                  </div>
+
+                  <div className="hidden md:block">
+                    <RemoveButton onClick={() => remove(product.slug)} name={product.name} />
+                  </div>
+                </li>
+              )
+            })}
           </ul>
           <Link
             href="/store"
-            className={cn(buttonVariants({ variant: 'link' }), 'self-start text-navy hover:text-primary')}
+            className={cn(
+              buttonVariants({ variant: 'link' }),
+              'self-start text-navy hover:text-primary',
+            )}
           >
             <ArrowLeft aria-hidden="true" />
             Continue shopping
@@ -161,7 +179,15 @@ export function CartView() {
   )
 }
 
-function ProductTitle({ slug, name, category }: { slug: string; name: string; category: string }) {
+function ProductTitle({
+  slug,
+  name,
+  category,
+}: {
+  slug: string
+  name: string
+  category: string
+}) {
   return (
     <>
       <p className="text-xs font-semibold text-primary">{category}</p>
