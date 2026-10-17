@@ -7,7 +7,7 @@ import { ShoppingBag } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { StatusChip } from '@/components/status-chip'
-import { useCart } from '@/components/cart-provider'
+import { getMaxAllowedQty, useCart } from '@/components/cart-provider'
 import type { Product } from '@/lib/products'
 import { formatPrice } from '@/lib/site'
 import { cn } from '@/lib/utils'
@@ -21,9 +21,13 @@ export function ProductCard({
   showStock?: boolean
   className?: string
 }) {
-  const { add } = useCart()
+  const { add, items } = useCart()
   const router = useRouter()
   const href = `/store/${product.slug}`
+
+  const inCartQty = items.find((i) => i.product.slug === product.slug)?.qty ?? 0
+  const maxAllowed = getMaxAllowedQty(product)
+  const reachedMax = inCartQty >= maxAllowed
 
   return (
     <article
@@ -61,25 +65,40 @@ export function ProductCard({
       <div className="flex flex-1 flex-col gap-2 p-3 md:gap-3 md:p-4">
         <StatusChip tone="accent">{product.category}</StatusChip>
         <h3 className="line-clamp-2 min-h-[2.75em] text-sm leading-snug font-semibold text-navy md:text-base">
-          <Link href={href} className="outline-none after:absolute after:inset-0 focus-visible:underline">
+          <Link
+            href={href}
+            className="outline-none after:absolute after:inset-0 focus-visible:underline"
+          >
             {product.name}
           </Link>
         </h3>
-        <p className="mt-auto text-lg font-bold text-navy md:text-xl">{formatPrice(product.price)}</p>
+        <p className="mt-auto text-lg font-bold text-navy md:text-xl">
+          {formatPrice(product.price)}
+        </p>
         <Button
           className="relative z-10 w-full"
-          variant={product.inStock ? 'default' : 'secondary'}
-          disabled={!product.inStock}
+          variant={product.inStock && !reachedMax ? 'default' : 'secondary'}
+          disabled={!product.inStock || reachedMax}
           onClick={() => {
-            add(product)
-            toast.success('Added to cart', {
-              description: product.name,
-              action: { label: 'View cart', onClick: () => router.push('/cart') },
-            })
+            const added = add(product, 1)
+            if (added) {
+              toast.success('Added to cart', {
+                description: product.name,
+                action: { label: 'View cart', onClick: () => router.push('/cart') },
+              })
+            } else {
+              toast.error('Maximum available stock reached', {
+                description: `You already have ${inCartQty} in your cart.`,
+              })
+            }
           }}
         >
           <ShoppingBag aria-hidden="true" />
-          {product.inStock ? 'Add to Cart' : 'Unavailable'}
+          {!product.inStock
+            ? 'Unavailable'
+            : reachedMax
+              ? `Max in Cart (${inCartQty})`
+              : 'Add to Cart'}
         </Button>
       </div>
     </article>

@@ -1,3 +1,4 @@
+from django.db import transaction
 import re
 from rest_framework import serializers
 from .models import Order, OrderItem
@@ -51,22 +52,42 @@ class OrderCreateSerializer(serializers.ModelSerializer):
         return items
 
     def create(self, validated_data):
-        validated_data.pop("website", None) # Remove honeypot field so request don't break
+        validated_data.pop("website", None)  # Remove honeypot field
         items_data = validated_data.pop("items")
-        order = Order.objects.create(**validated_data)
 
-        for item in items_data:
-            try:
-                product = Product.objects.get(pk=item["product_id"], is_active=True)
-            except Product.DoesNotExist:
-                order.delete()
-                raise serializers.ValidationError(f"Product {item['product_id']} not found or unavailable.")
+        with transaction.atomic():
+            order = Order.objects.create(**validated_data)
 
-            OrderItem.objects.create(
-                order=order,
-                product=product,
-                quantity=item["quantity"],
-            )
+            for item in items_data:
+                try:
+                    product = Product.objects.select_for_update().get(
+                        pk=item["product_id"],
+                        is_active=True,
+                    )
+                except Product.DoesNotExist:
+                    raise serializers.ValidationError(
+                        {"items": f"Product {item['product_id']} not found or unavailable."}
+                    )
+
+                requested_qty = item["quantity"]
+                if product.stock_quantity < requested_qty:
+                    raise serializers.ValidationError(
+                        {
+                            "items": (
+                                f"Not enough stock for '{product.name}'. "
+                                f"Available: {product.stock_quantity}, requested: {requested_qty}."
+                            )
+                        }
+                    )
+
+                OrderItem.objects.create(
+                    order=order,
+                    product=product,
+                    quantity=requested_qty,
+                )
+
+            order.refresh_from_db()
+
         return order
 
 

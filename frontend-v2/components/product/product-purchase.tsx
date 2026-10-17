@@ -7,23 +7,31 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { QuantityStepper } from '@/components/quantity-stepper'
 import { StatusChip } from '@/components/status-chip'
-import { MAX_QTY, useCart } from '@/components/cart-provider'
+import { getMaxAllowedQty, useCart } from '@/components/cart-provider'
 import type { Product } from '@/lib/products'
 import { formatPrice } from '@/lib/site'
 
 export function ProductPurchase({ product }: { product: Product }) {
   const [qty, setQty] = useState(1)
-  const { add } = useCart()
+  const { add, items } = useCart()
   const router = useRouter()
 
-  const maxAllowed = product.stockQuantity > 0 ? Math.min(MAX_QTY, product.stockQuantity) : MAX_QTY
+  const inCartQty = items.find((i) => i.product.slug === product.slug)?.qty ?? 0
+  const maxAllowed = getMaxAllowedQty(product)
+  const remainingCanAdd = Math.max(0, maxAllowed - inCartQty)
+  const canPurchase = product.inStock && remainingCanAdd > 0
+  const safeQty = Math.min(qty, Math.max(1, remainingCanAdd))
 
   const addToCart = () => {
-    add(product, qty)
-    toast.success('Added to cart', {
-      description: `${qty} × ${product.name}`,
-      action: { label: 'View cart', onClick: () => router.push('/cart') },
-    })
+    if (!canPurchase) return
+    const added = add(product, safeQty)
+    if (added) {
+      setQty(1)
+      toast.success('Added to cart', {
+        description: `${safeQty} × ${product.name}`,
+        action: { label: 'View cart', onClick: () => router.push('/cart') },
+      })
+    }
   }
 
   return (
@@ -40,7 +48,8 @@ export function ProductPurchase({ product }: { product: Product }) {
           {product.inStock ? (
             <p className="flex items-center gap-1.5 text-sm font-semibold text-success">
               <CheckCircle2 className="size-4.5" aria-hidden="true" />
-              In stock ({product.stockQuantity} available) – ships in 1-2 days
+              In stock ({product.stockQuantity} available
+              {inCartQty > 0 ? `, ${inCartQty} in cart` : ''}) – ships in 1-2 days
             </p>
           ) : (
             <p className="flex items-center gap-1.5 text-sm font-semibold text-destructive">
@@ -54,19 +63,24 @@ export function ProductPurchase({ product }: { product: Product }) {
 
       <div className="flex flex-col gap-3 sm:flex-row">
         <QuantityStepper
-          value={qty}
+          value={safeQty}
           onChange={setQty}
-          max={maxAllowed}
+          max={Math.max(1, remainingCanAdd)}
           className="self-start"
         />
+        {/* Desktop add-to-cart; mobile uses the sticky bar below */}
         <Button
           size="xl"
           className="hidden flex-1 md:inline-flex"
-          disabled={!product.inStock}
+          disabled={!canPurchase}
           onClick={addToCart}
         >
           <ShoppingBag aria-hidden="true" />
-          {product.inStock ? 'Add to Cart' : 'Out of stock'}
+          {!product.inStock
+            ? 'Out of stock'
+            : remainingCanAdd === 0
+              ? `All ${maxAllowed} available in cart`
+              : 'Add to Cart'}
         </Button>
       </div>
 
@@ -79,12 +93,16 @@ export function ProductPurchase({ product }: { product: Product }) {
       <div className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 px-4 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-8px_24px_-12px_rgb(26_26_46/0.2)] backdrop-blur md:hidden">
         <div className="flex items-center gap-3">
           <div className="leading-tight">
-            <p className="text-xs text-muted-foreground">{qty} × item</p>
-            <p className="text-lg font-bold text-navy">{formatPrice(product.price * qty)}</p>
+            <p className="text-xs text-muted-foreground">{safeQty} × item</p>
+            <p className="text-lg font-bold text-navy">{formatPrice(product.price * safeQty)}</p>
           </div>
-          <Button size="lg" className="flex-1" disabled={!product.inStock} onClick={addToCart}>
+          <Button size="lg" className="flex-1" disabled={!canPurchase} onClick={addToCart}>
             <ShoppingBag aria-hidden="true" />
-            {product.inStock ? 'Add to Cart' : 'Out of stock'}
+            {!product.inStock
+              ? 'Out of stock'
+              : remainingCanAdd === 0
+                ? 'Max stock in cart'
+                : 'Add to Cart'}
           </Button>
         </div>
       </div>
